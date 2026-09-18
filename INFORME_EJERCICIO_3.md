@@ -110,13 +110,21 @@ mismo patrón que `smoke_test.py`, que generó los logs de prueba del
 Ejercicio 1.
 
 **Nota metodológica 2 — el razonamiento.** La consigna pide el slot 4 "con el
-razonamiento activado". `chat.py` sólo envía el parámetro `reasoning` para
-los slots con `supports_effort=True`, y el slot 4 está configurado con
-`False`, así que el parámetro **no se envía explícitamente**. Sin embargo el
-razonamiento está activo: todas las respuestas devuelven
-`reasoning_tokens > 0` (entre 80 y 60.619 según la corrida), porque DeepSeek
-razona por defecto. Activarlo de forma explícita habría requerido modificar
-`models.py`, que pertenece al Ejercicio 1.
+razonamiento activado", y lo estuvo en las 14 llamadas: todas devuelven
+`reasoning_tokens > 0`, entre 80 y 60.619 según la corrida. DeepSeek razona
+por defecto, así que no hizo falta pedirlo.
+
+El parámetro `reasoning` no se envió de forma explícita porque `chat.py` sólo
+lo manda para los slots con `supports_effort=True` y el slot 4 está declarado
+con `False`, y el objetivo era reproducir exactamente el camino de código del
+chat interactivo. **Enviarlo igual era posible sin tocar ningún archivo del
+Ejercicio 1**: `send_chat` acepta `reasoning` como parámetro propio
+(`openrouter_client.py`), y `correr_effort.py` lo usa así para el slot 1 sin
+modificar `models.py`. `correr_vida.py` podría haber hecho lo mismo.
+
+No hacerlo tuvo un costo medible, y es justamente lo que propone la
+conclusión del §3.5: con `reasoning: {"effort": "low"}` el modelo no habría
+podido gastar los 60.619 tokens de pensamiento de la corrida ganadora.
 
 **Nota metodológica 3 — llamadas abortadas.** Además de las corridas de la
 tabla, **6 llamadas nunca devolvieron respuesta** y se cortaron por timeout
@@ -126,7 +134,7 @@ detallan en el hallazgo 4.2.
 
 **Nota metodológica 4 — corridas solapadas y marcas de tiempo.** La
 conversación ganadora se inició a las 17:14:50 y su respuesta recién llegó a
-las 17:36, después de más de 20 minutos generando. Mientras tanto se lanzaron
+las 17:36, después de ~21 minutos generando. Mientras tanto se lanzaron
 otras corridas en paralelo, que terminaron antes: por eso las fechas de
 modificación de los archivos `20260918_172415`, `20260918_172551` y
 `20260918_172844` son **anteriores** a la del log ganador, aunque sus
@@ -211,6 +219,11 @@ en todas las corridas.
 - **Precio de lectura de cache:** $0,012/M contra $0,060/M de entrada normal
   (5× más barato).
 - **Ahorro obtenido:** 1.792 × ($0,060 − $0,012)/M = **$0,000086**.
+- El ahorro se derivó de los precios de catálogo y no del campo
+  `cache_discount` que también expone la API: `format_usage` registra
+  `cached_tokens` pero no ese campo, así que los logs entregados no lo
+  contienen. Se optó por no modificar `usage.py` para no alterar el formato
+  de los logs ya entregados del Ejercicio 1.
 
 El ahorro es minúsculo en términos absolutos, y ese es en sí mismo el
 resultado: **con prompts de ~2.000 tokens el cache es irrelevante frente al
@@ -219,6 +232,15 @@ mientras que los 60.619 tokens de razonamiento de esa misma llamada costaron
 unos $0,0073 — es decir, **85 veces más de lo que el cache llegó a ahorrar**.
 El cache recién rendiría con un prefijo estático de decenas de miles de
 tokens.
+
+**El diseño del prompt cumplió la condición de caching al 100 %.** La
+consigna pide que "la parte estática vaya al principio, idéntica en todos los
+intentos, y lo que cambia entre corridas vaya al final". Nuestro prompt es
+**enteramente estático, sin cola variable**: las tres corridas del v2
+mandaron el mismo archivo byte a byte, y lo mismo las del v1. No hay ninguna
+porción del prefijo que cambie entre intentos, que es la forma más fuerte
+posible de satisfacer esa condición. Lo que falló no fue el diseño del prompt
+sino la respuesta del proveedor.
 
 **Hallazgo.** El cache de DeepSeek resultó **intermitente**: el mismo prefijo
 de 2.123 tokens dio `cached=0` en sus primeras llamadas y `cached=1792`
@@ -233,17 +255,20 @@ distintas del proveedor y que el cache de prefijo es por instancia.
 | Fuente | Monto |
 |---|---:|
 | Suma de los logs del Ejercicio 2 (14 llamadas) | **$0,029008** |
-| Ejercicio 1 — slot 1, dos corridas de effort | $0,000122 |
+| Ejercicio 1 — slot 1, par de effort del 16/09 (`reasoning=0`) | $0,000122 |
+| Ejercicio 1 — slot 1, par de effort del 18/09 (hallazgo 4.3) | $0,002273 |
 | Ejercicio 1 — slot 2, con cache hit | $0,009009 |
 | Ejercicio 1 — slot 3, salida estructurada | $0,002171 |
 | Ejercicio 1 — slot 4, log de prueba | $0,000145 |
-| **Total atribuible a esta misión** | **$0,040455** |
-| **Dashboard de OpenRouter (`openrouter.ai/activity`)** | **$0,075618 (via `auth/key`)** |
+| **Total atribuible a esta misión** | **$0,042728** |
+| **Gasto real de la key (`auth/key`, medido 18/09 19:30)** | **$0,077892** |
 
-Dato lateral que confirma la premisa del ejercicio: el slot 2 (Claude Haiku
-4.5) costó **$0,009009 en dos turnos**, más que las 14 llamadas del
-Ejercicio 2 contra el slot 4 juntas descontando la ganadora. El "escalón
-barato" no es una metáfora.
+Dato lateral sobre el "escalón barato": el slot 2 (Claude Haiku 4.5) costó
+**$0,009009 en dos turnos**, contra $0,000145 del slot 4 en su log de prueba.
+Las preguntas no fueron las mismas, así que el cociente no es una comparación
+controlada; lo que sí es comparable es el precio de catálogo, donde la
+entrada del slot 2 cuesta **16,7 veces** más que la del slot 4 ($1,00 contra
+$0,06 por millón) y la salida **41,7 veces** más ($5,00 contra $0,12).
 
 La cuenta de OpenRouter es de la cátedra y no tenemos acceso a su panel de
 actividad, así que el contraste se hizo contra la fuente equivalente que sí
@@ -253,9 +278,16 @@ crédito de la cuenta).
 
 | Fuente | Monto |
 |---|---:|
-| Suma de todos los logs entregados | $0,040455 |
-| **`usage` reportado por la API para la key** | **$0,075618** |
-| **Diferencia sin registrar en logs** | **$0,035163** |
+| Suma de todos los logs entregados | $0,042728 |
+| **`usage` reportado por la API para la key** | **$0,077892** |
+| **Diferencia sin registrar en logs** | **$0,035164** |
+
+La medición de `auth/key` se tomó el 18/09 a las 19:30, después de la última
+corrida. Una medición anterior, previa a las dos corridas de effort, daba
+$0,075618: la diferencia entre ambas es de $0,002274, que coincide con el
+costo sumado de esos dos logs ($0,002273). Esa coincidencia confirma que la
+contabilidad de los logs entregados es exacta y que la brecha que se analiza
+abajo no crece con las corridas nuevas.
 
 ### Por qué no cierran, desglosado por día
 
@@ -267,8 +299,8 @@ diferencia:
 | 16/09 — Ejercicio 1 | $0,011447 | — | — |
 | 17/09 — Ejercicio 2, primeros intentos | $0,002602 | — | — |
 | 16 y 17/09 combinados | $0,014049 | $0,024807 | **$0,010758** |
-| 18/09 — Ejercicio 2, corridas finales | $0,026406 | $0,050812 | **$0,024406** |
-| **Total** | **$0,040455** | **$0,075618** | **$0,035163** |
+| 18/09 — Ejercicio 2 y corridas de effort | $0,028679 | $0,053085 | **$0,024406** |
+| **Total** | **$0,042728** | **$0,077892** | **$0,035164** |
 
 **La diferencia del 18/09 ($0,024406) son las 6 llamadas abortadas.** Se
 cortaron por timeout del lado del cliente, pero el modelo siguió generando
@@ -284,7 +316,7 @@ documentada en `SPEC.md`: un primer intento del slot 2 con un contexto
 estático de ~2.000 tokens que no generó ningún cache hit, y que motivó
 ampliar `static_context.py` a ~4.800 tokens. Ese intento no fue conservado.
 
-**Conclusión del contraste.** Los logs capturan el **53,5 %** del gasto real.
+**Conclusión del contraste.** Los logs capturan el **54,9 %** del gasto real.
 No es un error de contabilidad del informe sino una limitación del
 instrumento: `logger.py` escribe el usage **después** de recibir la
 respuesta, de modo que toda llamada que no vuelve queda facturada pero
@@ -326,7 +358,7 @@ turno y ambas con los 9 tests en verde:
 | Entrada | 2.123 | 1.553 | −27 % |
 | Razonamiento | 60.619 | 2.578 | **−96 %** |
 | Costo | $0,021008 | $0,001455 | **−93 %** |
-| Tiempo de respuesta | > 10 min | 66 s | **−89 %** |
+| Tiempo de respuesta | ~21 min | 66 s | **−95 %** |
 | Tests en verde | 9/9 | 9/9 | igual |
 
 La lección es contraintuitiva: el ejemplo del glider parecía el más valioso

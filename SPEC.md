@@ -148,12 +148,16 @@ Si en el futuro se regenera `vida.py`, hay que actualizar **los dos**: el
 codigo y el archivo de prompt que lo produjo, para que sigan correspondiendose
 con el log.
 
-### Por que el prompt tiene ese tamaño
+### Que tamaño deberia tener el prompt (leccion del v2)
 
-Dos restricciones opuestas lo fijan:
+> Esta seccion describe el **v2**, la version optimizada, no el prompt que
+> genero el entregable. El `vida.py` del repo salio del **v1**, que mide
+> 2.123 tokens y si incluye el glider. Ver la seccion anterior.
+
+Dos restricciones opuestas fijan el tamaño util:
 
 - **Piso:** el cache por prefijo de DeepSeek necesita mas de 1.024 tokens
-  para activarse. El prompt mide ~1.550 tokens.
+  para activarse. El v2 mide ~1.550 tokens; el v1, 2.123.
 - **Techo:** los ejemplos few-shot dibujados como grillas ASCII hacen que el
   modelo los simule celda por celda en su cadena de pensamiento. Una version
   previa que incluia el glider (10x10, 4 generaciones) consumio **60.619
@@ -161,8 +165,10 @@ Dos restricciones opuestas lo fijan:
   **2.578**, con identico resultado en los tests. Ver `INFORME_EJERCICIO_3.md`,
   hallazgo 4.1.
 
-Por eso el prompt transmite el contrato completo y las trampas conocidas en
-prosa, y no dibuja ninguna grilla.
+Por eso el v2 transmite el contrato completo y las trampas conocidas en
+prosa, y no dibuja ninguna grilla. Si hay que regenerar `vida.py`, conviene
+partir de el y no del v1: consigue los mismos 9 tests en verde por el 7% del
+costo.
 
 ### Regla que no se negocia
 
