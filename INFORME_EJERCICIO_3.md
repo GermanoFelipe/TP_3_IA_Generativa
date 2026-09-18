@@ -62,7 +62,9 @@ Hallazgos de la comparación:
 
 - **GPT-5.6 Luna no acepta `temperature` ni `top_k`.** Es un razonador puro:
   las perillas de sampling clásicas no están disponibles y el único control
-  de "cuánto pensar" es `reasoning_effort`.
+  de "cuánto pensar" es `reasoning_effort`. Su efecto quedó medido en el
+  hallazgo 4.3: sube los tokens de razonamiento un 34 % entre `low` y `high`,
+  pero **sólo si la tarea da algo que razonar**.
 - **Claude Haiku 4.5 acepta `reasoning` pero no `reasoning_effort`.** Usa
   presupuesto de pensamiento por `max_tokens`, no por nivel.
 - **DeepSeek V4 Flash es el más completo en perillas de sampling**: es el
@@ -352,7 +354,45 @@ devolvieron literalmente `"yes"` con un usage idéntico
 ventas, contenido que no corresponde a ninguna pregunta formulada. Sólo 1 de
 esos 8 turnos produjo el código pedido.
 
-### 4.3 La interfaz de chat no admite prompts multilínea
+### 4.3 El `reasoning_effort` sólo se nota si el prompt exige razonar
+
+Las dos primeras corridas del slot 1 (`slot1-low` y `slot1-high`, del 16/09)
+usaron el prompt *"explicame en 2 lineas que es la recursividad"* y **ambas
+reportaron `reasoning=0`**, con el nivel `high` produciendo incluso una
+respuesta más corta y barata que `low`:
+
+| Corrida | Entrada | Salida | Razonamiento | Costo |
+|---|---:|---:|---:|---:|
+| `slot1-low` (16/09) | 21 | 51 | **0** | $0,000065 |
+| `slot1-high` (16/09) | 21 | 44 | **0** | $0,000057 |
+
+La conclusión apresurada habría sido que GPT-5.6 Luna no devuelve tokens de
+razonamiento, como le pasa a la serie `o` de OpenAI según anticipa la
+consigna. Pero la causa era otra: **el prompt no tenía nada que razonar**.
+Pedir una definición de dos líneas es una tarea de recuperación, no de
+inferencia, así que el modelo no gasta presupuesto de pensamiento en ningún
+nivel y la diferencia entre `low` y `high` queda en el ruido.
+
+Repitiendo el experimento con un problema que requiere varios pasos
+encadenados —contar los enteros de 1 a 10000 no divisibles por 2, 3, 5 ni 7,
+que se resuelve por inclusión-exclusión sobre cuatro conjuntos— el efecto
+aparece con el mismo prompt en los dos niveles:
+
+| Corrida | Entrada | Salida | Razonamiento | Costo |
+|---|---:|---:|---:|---:|
+| `slot1-effort-low` (18/09) | 62 | 925 | **309** | $0,001122 |
+| `slot1-effort-high` (18/09) | 62 | 949 | **415** | $0,001151 |
+| | | | **+106 (+34 %)** | +2,6 % |
+
+**El hallazgo es sobre la medición, no sobre el modelo.** `reasoning_effort`
+es un presupuesto máximo, no una cuota que el modelo esté obligado a gastar:
+si la tarea no lo necesita, subir el nivel no cambia nada y el parámetro
+parece no funcionar. Para observar su efecto hay que elegir una tarea cuya
+dificultad esté por encima de lo que el nivel bajo alcanza a resolver. Las
+cuatro corridas quedan entregadas en `logs/` para que la comparación sea
+verificable, y `correr_effort.py` reproduce la segunda.
+
+### 4.4 La interfaz de chat no admite prompts multilínea
 
 `chat.py` lee la entrada con `input()`, que devuelve una sola línea. Pegar un
 prompt multilínea lo fragmenta en tantos prompts como renglones tenga, y cada

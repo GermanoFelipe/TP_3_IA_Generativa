@@ -40,6 +40,28 @@ el `usage` de cada respuesta y dejando un log `.md` por conversacion.
 IDs verificados contra el catalogo de OpenRouter el 2026-09-16 (todos
 respondieron correctamente en las corridas de prueba).
 
+## El efecto del effort (slot 1)
+
+La primera medicion comparo `low` contra `high` con el prompt "explicame en 2
+lineas que es la recursividad" y dio **`reasoning=0` en los dos niveles**: ese
+prompt no tiene nada que razonar, asi que el modelo no gasta presupuesto de
+pensamiento y la diferencia queda en el ruido.
+
+`correr_effort.py` repite la comparacion con un problema de varios pasos
+encadenados (inclusion-exclusion sobre cuatro conjuntos) y ahi el efecto si se
+ve, con el mismo prompt en ambos niveles:
+
+| Corrida | Razonamiento | Costo |
+|---|---:|---:|
+| `slot1-effort-low` | 309 | $0.001122 |
+| `slot1-effort-high` | 415 | $0.001151 |
+
+`reasoning_effort` es un **presupuesto maximo, no una cuota obligatoria**: si
+la tarea no lo necesita, subir el nivel no cambia nada. Si se rehace esta
+medicion, hay que usar una tarea cuya dificultad supere lo que el nivel bajo
+resuelve, o el resultado vuelve a ser cero. Detalle en el hallazgo 4.3 del
+informe.
+
 ## Por que el contexto estatico del slot 2 es tan largo
 
 Claude Haiku 4.5 no cachea prompts por debajo de **4096 tokens** (a
@@ -66,8 +88,10 @@ de entrada de ese turno cae a una fraccion del turno anterior. Fuente:
 - `correr_vida.py` — lo mismo que `smoke_test.py` pero para el Ejercicio 2:
   manda el prompt de `prompts/` al slot 4 por el mismo camino de codigo que
   `chat.py`, sin modificarlo. Ver "Ejercicio 2" mas abajo.
-- `prompts/prompt_vida_v2.txt` — el prompt del Ejercicio 2, en una sola
-  linea.
+- `correr_effort.py` — manda el mismo prompt al slot 1 con effort `low` y
+  `high` para comparar sus `reasoning_tokens`. Reusa `test_slot` de
+  `smoke_test.py`. Ver "El efecto del effort" mas abajo.
+- `prompts/` — los dos prompts del Ejercicio 2, cada uno en una sola linea.
 
 ## Requisitos cubiertos
 

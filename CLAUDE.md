@@ -45,7 +45,8 @@ cp .env.example .env   # completar OPENROUTER_API_KEY
 
 ```bash
 python chat.py            # chat interactivo, los 4 slots
-python correr_vida.py     # Ejercicio 2: manda prompts/prompt_vida_v2.txt al slot 4
+python correr_vida.py     # Ejercicio 2: manda un prompt de prompts/ al slot 4
+python correr_effort.py   # slot 1 con effort low y high, para comparar
 ```
 
 ## Testear
