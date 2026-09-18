@@ -1,75 +1,82 @@
 import sys
 
-NEIGHBORS = [
-    (-1, -1),
-    (-1, 0),
-    (-1, 1),
-    (0, -1),
-    (0, 1),
-    (1, -1),
-    (1, 0),
-    (1, 1),
-]
+NEIGHBORS = (
+    (-1, -1), (-1, 0), (-1, 1),
+    (0, -1),           (0, 1),
+    (1, -1),  (1, 0),  (1, 1),
+)
 
+def read_grid(path):
+    with open(path, "r", encoding="utf-8", newline="") as f:
+        return [line.replace("\r", "").replace("\n", "") for line in f]
+
+def step(alive, rows, cols):
+    candidates = set(alive)
+    for r, c in alive:
+        for dr, dc in NEIGHBORS:
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < rows and 0 <= nc < cols:
+                candidates.add((nr, nc))
+
+    result = set()
+    for r, c in candidates:
+        neighbors = 0
+        for dr, dc in NEIGHBORS:
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < rows and 0 <= nc < cols and (nr, nc) in alive:
+                neighbors += 1
+
+        if (r, c) in alive:
+            if neighbors == 2 or neighbors == 3:
+                result.add((r, c))
+        else:
+            if neighbors == 3:
+                result.add((r, c))
+
+    return result
 
 def main():
     if len(sys.argv) != 3:
-        sys.stderr.write(
-            "Uso: python3 vida.py <archivo_estado_inicial> <generaciones>\n"
-        )
-        return 1
+        sys.exit("Usage: python3 vida.py <archivo_estado_inicial> <generaciones>")
 
     try:
-        generaciones = int(sys.argv[2])
+        generations = int(sys.argv[2])
     except ValueError:
-        sys.stderr.write("Error: las generaciones deben ser un entero.\n")
-        return 1
+        sys.exit("Error: <generaciones> must be an integer")
 
-    if generaciones < 0:
-        sys.stderr.write("Error: las generaciones no pueden ser negativas.\n")
-        return 1
+    if generations < 0:
+        sys.exit("Error: <generaciones> must be non-negative")
 
-    try:
-        with open(sys.argv[1], "r") as f:
-            lineas = [line.strip("\r\n") for line in f]
-    except OSError as e:
-        sys.stderr.write("Error: no se pudo leer el archivo: {}\n".format(e))
-        return 1
+    grid = read_grid(sys.argv[1])
+    rows = len(grid)
+    cols = len(grid[0]) if rows else 0
 
-    if not lineas:
-        return 0
+    if generations == 0:
+        output = grid
+    else:
+        alive = set()
+        for r, row in enumerate(grid):
+            for c, ch in enumerate(row):
+                if ch == "#":
+                    alive.add((r, c))
 
-    alto = len(lineas)
-    ancho = len(lineas[0])
+        for _ in range(generations):
+            if not alive:
+                break
+            new_alive = step(alive, rows, cols)
+            if new_alive == alive:
+                alive = new_alive
+                break
+            alive = new_alive
 
-    if any(len(linea) != ancho for linea in lineas):
-        sys.stderr.write("Error: la grilla debe ser rectangular.\n")
-        return 1
+        output = []
+        for r in range(rows):
+            output.append("".join("#" if (r, c) in alive else "." for c in range(cols)))
 
-    grilla = [list(linea) for linea in lineas]
-
-    for _ in range(generaciones):
-        nueva_grilla = [["."] * ancho for _ in range(alto)]
-
-        for r in range(alto):
-            for c in range(ancho):
-                vecinas = 0
-
-                for dr, dc in NEIGHBORS:
-                    nr, nc = r + dr, c + dc
-                    if 0 <= nr < alto and 0 <= nc < ancho and grilla[nr][nc] == "#":
-                        vecinas += 1
-
-                if grilla[r][c] == "#":
-                    nueva_grilla[r][c] = "#" if vecinas in (2, 3) else "."
-                else:
-                    nueva_grilla[r][c] = "#" if vecinas == 3 else "."
-
-        grilla = nueva_grilla
-
-    sys.stdout.write("\n".join("".join(fila) for fila in grilla) + "\n")
-    return 0
-
+    out = "\n".join(output)
+    if output:
+        out += "\n"
+    sys.stdout.buffer.write(out.encode("ascii"))
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
