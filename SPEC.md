@@ -1,10 +1,28 @@
-# SPEC — Ejercicio 1: interfaz de chat con 4 modelos via OpenRouter
+# SPEC — Mision "el prompt minimo"
 
 Mision de referencia: `missions/prompting/mission.md` del repo
-`austral-ing-ai/talksmith-ing`. Este documento cubre solo el **Ejercicio 1**
-("una interfaz de chat, cuatro modelos").
+`austral-ing-ai/talksmith-ing`. Este documento cubre los tres ejercicios:
+la interfaz de chat (Ejercicio 1), la generacion de `vida.py` (Ejercicio 2)
+y el informe de costos (Ejercicio 3).
 
-## Objetivo
+## Como se corren los tests (leer antes que nada)
+
+Son **dos suites distintas** y se invocan distinto:
+
+```bash
+python -m pytest        # 13 tests del proyecto (usage, logger, models)
+python test_vida.py     # 9 tests de la catedra contra vida.py
+```
+
+`test_vida.py` **no se corre con pytest**. El archivo de la catedra hace
+`sys.argv.pop(1)` durante el import para resolver contra que script correr,
+asi que bajo `python -m pytest test_vida.py` se auto-apunta a si mismo y los
+9 casos fallan. No es un bug del codigo: es el contrato de ese archivo, que
+esta pensado para ejecutarse directo. `pytest.ini` declara
+`testpaths = tests`, de modo que `python -m pytest` a secas no lo recoge y no
+hay conflicto.
+
+## Ejercicio 1 — Objetivo
 
 Una interfaz de chat en terminal que sirve 4 modelos via OpenRouter, cada
 uno ejercitando una capacidad distinta de la clase de prompting, mostrando
@@ -45,6 +63,11 @@ de entrada de ese turno cae a una fraccion del turno anterior. Fuente:
   conversacion) y `/exit`.
 - `smoke_test.py` — corridas no interactivas usadas para generar los logs
   de prueba de la entrega, reusando `build_messages`/`send_chat`/`logger`.
+- `correr_vida.py` — lo mismo que `smoke_test.py` pero para el Ejercicio 2:
+  manda el prompt de `prompts/` al slot 4 por el mismo camino de codigo que
+  `chat.py`, sin modificarlo. Ver "Ejercicio 2" mas abajo.
+- `prompts/prompt_vida_v2.txt` — el prompt del Ejercicio 2, en una sola
+  linea.
 
 ## Requisitos cubiertos
 
@@ -63,7 +86,90 @@ OpenRouter (ver `logs/`), no con mocks, porque el objetivo del ejercicio es
 justamente verificar el comportamiento real de reasoning/caching/structured
 output de cada proveedor.
 
-## Fuera de alcance de este documento
+## Ejercicio 2 — `vida.py` en 1 prompt
 
-Ejercicio 2 (`vida.py`), Ejercicio 3 (informe de costos) y la entrega final
-al repo del grupo.
+El target (el juego de la vida de Conway) se pidio siempre al slot 4
+(`deepseek/deepseek-v4-flash-0731`) a traves del camino de codigo de la
+interfaz del Ejercicio 1.
+
+### Como se envia el prompt
+
+`chat.py` lee la entrada con `input()`, que devuelve **una sola linea**. Un
+prompt multilinea pegado en la consola se fragmenta en tantos prompts como
+renglones tenga y quema la corrida: el log `20260917_172958` tiene 6 turnos
+de usuario que son los renglones sueltos de un unico contrato.
+
+Por eso los prompts del Ejercicio 2 estan escritos en **una sola linea**, y
+se envian con `correr_vida.py` en lugar de pegarlos a mano: la consola de
+Windows no pega de forma fiable un texto de ese tamaño. `correr_vida.py`
+importa `build_messages`, `send_chat` y el `logger` de la interfaz sin
+modificarlos, asi que el log `.md` que produce es identico al del chat
+interactivo. Es el mismo patron que `smoke_test.py`.
+
+### Cual prompt genero el `vida.py` entregado
+
+`prompts/` tiene dos archivos y **no son intercambiables**:
+
+| Archivo | Tamaño | Genero el entregable |
+|---|---:|---|
+| `prompt_vida_v1_ganador.txt` | 7.264 chars | **SI** — es el turno `## user` del log ganador, extraido textualmente |
+| `prompt_vida_v2.txt` | 5.923 chars | No — version optimizada posterior |
+
+El `vida.py` del repo salio del **v1**. El v2 elimina los ejemplos dibujados
+como grillas y consigue el mismo resultado en los tests con 96% menos
+razonamiento, pero se corrio despues: se conserva como evidencia del
+hallazgo 4.1 del informe, no como el prompt del entregable.
+
+Si en el futuro se regenera `vida.py`, hay que actualizar **los dos**: el
+codigo y el archivo de prompt que lo produjo, para que sigan correspondiendose
+con el log.
+
+### Por que el prompt tiene ese tamaño
+
+Dos restricciones opuestas lo fijan:
+
+- **Piso:** el cache por prefijo de DeepSeek necesita mas de 1.024 tokens
+  para activarse. El prompt mide ~1.550 tokens.
+- **Techo:** los ejemplos few-shot dibujados como grillas ASCII hacen que el
+  modelo los simule celda por celda en su cadena de pensamiento. Una version
+  previa que incluia el glider (10x10, 4 generaciones) consumio **60.619
+  tokens de razonamiento**; describiendo los mismos casos en prosa bajo a
+  **2.578**, con identico resultado en los tests. Ver `INFORME_EJERCICIO_3.md`,
+  hallazgo 4.1.
+
+Por eso el prompt transmite el contrato completo y las trampas conocidas en
+prosa, y no dibuja ninguna grilla.
+
+### Regla que no se negocia
+
+`vida.py` entra al repo **tal cual salio del chat**. Se extrae del bloque de
+codigo del log ganador con una expresion regular, nunca a mano. La
+verificacion es que el archivo y el bloque del log coincidan byte a byte
+(hoy: 2186 caracteres los dos). Si los tests fallan, lo que se reescribe es
+el prompt y se abre una conversacion nueva; nunca se corrige el codigo.
+
+## Ejercicio 3 — el informe
+
+`INFORME_EJERCICIO_3.md` contiene el trabajo previo obligatorio (que es un
+router, el mapa de los 7 proveedores y la comparacion de parametros
+soportados), la tabla de tokens y costos de todos los intentos, y los
+hallazgos. Sus numeros salen de los logs de `logs/` y son reconciliables
+contra ellos.
+
+## Donde vive `test_vida.py`
+
+En la raiz, al lado de `vida.py`. El script de la catedra busca `vida.py`
+en su propio directorio cuando se lo invoca sin argumentos
+(`Path(__file__).parent / "vida.py"`), asi que dentro de `tests/` no lo
+encontraba y los 9 casos daban error. Ademas `pytest.ini` apunta
+`testpaths = tests`, con lo cual `python -m pytest` lo recogia y mostraba 9
+tests en rojo. Con el archivo en la raiz las tres invocaciones quedan en
+verde:
+
+```bash
+python -m pytest            # 13 tests del proyecto
+python test_vida.py         # 9 tests de la catedra
+python test_vida.py ruta/a/vida.py
+```
+
+El archivo de la catedra no se modifico: solo cambio de ubicacion.
